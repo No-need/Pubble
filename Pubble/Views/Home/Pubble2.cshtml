@@ -1,0 +1,155 @@
+﻿<!-- index.html -->
+@section styles {
+    <style>
+        #canvas {
+            border: 1px solid #000;
+        }
+    </style>
+}
+	<canvas id="canvas" width="800" height="600"></canvas>
+
+
+<div class="modal fade" id="UserSettingModal" tabindex="-1" aria-labelledby="UserSettingModal" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">New Game</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form onsubmit="Start();return false;">
+				<div class="modal-body">
+					<div class="mb-3">
+                        <label for="Name" class="col-form-label text-danger">*Name:</label>
+                        <input type="text" class="form-control" required id="Name" autocomplete="off">
+					</div>
+					<div class="mb-3">
+						<label for="Color" class="col-form-label">Color:</label>
+						<input class="form-control" id="Color">
+					</div>
+				</div>
+				<div class="modal-footer">
+					<button type="submit" class="btn btn-primary"
+                    >Start</button>
+				</div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section scripts {
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        var pressKeyList = [];
+        const ballRadius = 25;
+        var connection = new signalR.HubConnectionBuilder().withUrl("/chatHub").build();
+        var user = {
+
+        };
+        var users = [];
+
+        $(function () {
+            ShowUserModal();
+        });
+
+        function ShowUserModal() {
+            var settingModal = new bootstrap.Modal(document.getElementById('UserSettingModal'), {
+                keyboard: false
+            });
+            settingModal.show();
+        }
+
+        function Start() {
+            user.Name = document.getElementById("Name").value;
+            user.Color = document.getElementById("Color").value;
+            connection.invoke("Start", user).catch(function (err) {
+                return console.error(err.toString());
+            });
+            bootstrap.Modal.getInstance(document.getElementById('UserSettingModal')).hide();
+        }
+
+        connection.start().then(function () {
+            console.log("Connection started");
+            UpdateCanvas();
+        }).catch(function (err) {
+            return console.error(err.toString());
+        });
+
+        connection.on('Started', function (userData){
+            user = JSON.parse(userData);
+            console.log(user);
+        });
+
+        connection.on('UpdateUserList', function (updatedUsersJson) {
+            users = JSON.parse(updatedUsersJson);        
+        });
+
+        connection.on('GameOver', function () {
+
+        });
+
+        // Move the ball on arrow key press and send updates to the server
+        window.addEventListener('keydown', (event) => {
+            let direction = '';
+            if (!pressKeyList.includes(event.key)) {
+                pressKeyList.push(event.key);
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            pressKeyList = pressKeyList.filter(x => x != e.key);
+        });
+
+        function UpdateCanvas() {
+            requestAnimationFrame(UpdateCanvas);
+            // Clear the canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+
+            pressKeyList.forEach(k => {
+                switch (k) {
+                    case 'ArrowUp':
+                        Move('up');
+                        break;
+                    case 'ArrowDown':
+                        Move('down');
+                        break;
+                    case 'ArrowLeft':
+                        Move('left');
+                        break;
+                    case 'ArrowRight':
+                        Move('right');
+                        break;
+                };
+            });
+
+            // Draw each user's ball on the canvas
+            users.forEach(user => {
+                switch (user.Shape.Type) {
+                    case 0:
+                        drawBall(user.Shape.X, user.Shape.Y, user.Color);
+                        break;
+                    default:
+                        break;
+                }
+            });
+        }
+
+        function Move(direction) {
+            for (var i = 0; i < user.Speed; i++) {
+                connection.invoke("MoveBall", direction).catch(function (err) {
+                    return console.error(err.toString());
+                });
+            }
+        }
+
+        // Draw the ball on the canvas
+        function drawBall(x, y,color) {
+            ctx.beginPath();
+            ctx.arc(x, y, ballRadius, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.fill();
+            ctx.closePath();
+        }
+    </script>
+}

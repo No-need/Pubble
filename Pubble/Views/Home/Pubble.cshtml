@@ -1,0 +1,221 @@
+
+	<canvas id='canvas' width='1200px' height='580px' style='background-color:#87CEEB;'></canvas>
+	<canvas id='canvas2' width='1200px' height='580px' style='background-color:#87CEEB;'></canvas>
+
+	<script>
+	window.addEventListener("load", function () {
+		RequirePermission();
+	});
+	function RequirePermission(){
+	  Notification.requestPermission(function (status) {
+		// This allows to use Notification.permission with Chrome/Safari
+		if (Notification.permission !== status) {
+		  Notification.permission = status;
+		}
+	  });
+	}
+	
+	function SendNotification(){
+		var n = new Notification("Notification",{
+			body:"HelloWorld!",
+			icon:"https://s3.us-east-1.amazonaws.com/asana-user-private-us-east-1/assets/1204536425627155/profile_photos/1204537383144209/acaf79ef63374b090f7797449d32aaf8_128x128.png"
+		});
+		n.onshow = function () {
+			setTimeout(n.close, 1000);
+		};	
+	}
+	
+	setInterval(SendNotification,3000);
+	var canvas = document.getElementById("canvas");
+	var ctx = canvas.getContext("2d");
+	var isRun = false;
+	var bList = [];
+	var sList = [];
+	var a = {
+	    x:250,
+		y:250,
+		r:20,
+		color:"Red",
+		speed:20,
+		Draw:function(){
+		  ctx.beginPath();
+		  ctx.arc(this.x, this.y, this.r, 0, 2 * Math.PI);
+		  ctx.fillStyle = "orange";
+	      ctx.fill();
+		  ctx.stroke();
+		}
+	}
+
+	function KeyDown(e){
+		if(e.which==80){
+			isRun = !isRun;
+			isRun?Start():Stop();
+			return;
+		}
+		if(!isRun)return;
+		switch(e.which){
+			case 37:
+				a.x=Math.max(a.r,a.x-a.speed);
+				break;
+			case 38:
+				a.y=Math.max(a.r,a.y-a.speed);
+				break;
+			case 39:
+				a.x=Math.min(canvas.width-a.r,a.x+a.speed);
+				break;
+			case 40:
+				a.y=Math.min(canvas.height-a.r,a.y+a.speed);
+				break;
+		}
+	}
+
+	function b(){
+	 	this.r = getRandom(30,50);
+		this.x = getRandom(this.r,canvas.width);
+		this.y = canvas.height - this.r;
+		this.Draw=function(){
+			if(this.y<=-100){
+				let index = bList.indexOf(this);
+				bList.splice(index,1);
+				return;
+			}
+			ctx.strokeStyle='white';			
+			ctx.beginPath();
+		  	ctx.arc(this.x, this.y, this.r, 0, 2 * Math.PI);
+		  	ctx.fillStyle = "skyblue";
+	   		ctx.fill();
+		  	ctx.stroke();
+			ctx.strokeStyle='black';
+			ctx.beginPath();
+		  	ctx.arc(this.x+this.r/2, this.y-this.r/2, this.r/4, 0, 2 * Math.PI);
+			ctx.fillStyle = "white";
+	   		ctx.fill();
+			ctx.stroke();
+	   };
+	}
+
+	function Star(){
+		this.r = 30;
+		this.spikes = 5;
+		this.ir = 15;
+		this.x = getRandom(this.r,canvas.width);
+		this.y = canvas.height - this.r;
+		this.Draw = function (){
+			if(this.y<=-100){
+				let index = sList.indexOf(this);
+				sList.splice(index,1);
+				return;
+			}
+		var rot=Math.PI/2*3;
+		var cx = this.x;
+		var cy = this.y
+		var x=this.x;
+		var y=this.y;
+		var outerRadius = this.r;
+		var innerRadius = this.ir;
+		var spikes = this.spikes;
+		var step=Math.PI/spikes;
+
+		ctx.beginPath();
+		ctx.moveTo(cx,cy-outerRadius)
+		for(i=0;i<spikes;i++){
+			x=cx+Math.cos(rot)*outerRadius;
+			y=cy+Math.sin(rot)*outerRadius;
+			ctx.lineTo(x,y)
+			rot+=step
+
+			x=cx+Math.cos(rot)*innerRadius;
+			y=cy+Math.sin(rot)*innerRadius;
+			ctx.lineTo(x,y)
+			rot+=step
+		}
+		ctx.lineTo(cx,cy-outerRadius);
+		ctx.lineWidth=5;
+		ctx.strokeStyle='blue';
+		ctx.closePath();	
+		ctx.stroke();
+		ctx.lineWidth = 1;
+		ctx.strokeStyle='black';
+		ctx.fillStyle='skyblue';
+		ctx.fill();
+		}
+	}
+
+	function AddB(){
+	 bList.push(new b());
+	}
+
+	function AddRandomB(){
+	 var n = getRandom(1,5);
+	  for(var i=0;i<n;i++){
+	   AddB();
+	  }
+	}
+
+	function AddS(){
+		sList.push(new Star());
+	}
+
+	function AddRandomS(){
+		var n = getRandom(1,5);
+		for(var i=0;i<5;i++){
+			AddS();
+		}
+	}
+
+	function Refresh(){
+	 ctx.clearRect(0, 0, canvas.width, canvas.height);
+	 a.Draw();
+	  for(var i=0;i<bList.length;i++){
+	   bList[i].Draw();
+	  }
+	  for(var i=0;i<sList.length;i++){
+	   sList[i].Draw();
+	  }
+	}
+
+	function G(){
+	  a.y=Math.min(canvas.height-a.r,a.y+0.5);
+	  for(var i = 0;i<bList.length;i++){
+	   var b = bList[i];
+	   b.y=b.y-1;
+	  }
+	  for(var i = 0;i<sList.length;i++){
+		  var s = sList[i];
+		  s.y=s.y-1;
+	  }
+	}
+
+	var exeList = [];
+	function Start(){
+		isRun = true;		
+	  	exeList.push(setInterval(Refresh,20));
+	  	exeList.push(setInterval(G,10));
+	  	exeList.push(setInterval(()=>{
+		  AddRandomB();
+		  AddRandomS();
+		},2000));  
+	}
+
+	function Stop(){
+		isRun = false;
+		//window.removeEventListener("keydown",KeyDown);
+		for(var i=0;i<exeList.length;i++){
+			clearInterval(exeList[i]);
+		}
+	}
+
+	function getRandom(min,max){
+		return Math.floor(Math.random()*(max-min+1))+min;
+	};
+
+	window.addEventListener("keydown",KeyDown);
+	Start();
+	</script>
+	<script>
+		var canvas2 = document.getElementById("canvas");
+		var ctx2 = canvas.getContext("2d");
+		ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+
+	</script>
