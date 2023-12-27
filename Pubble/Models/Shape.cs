@@ -23,6 +23,6 @@ namespace Pubble.Models
     {
         public override ShapeType Type { get; } = ShapeType.Ball;
 
-        public int Radius { get; set; }
+        public int Radius { get; set; } = 25;
     }
 }

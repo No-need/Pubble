@@ -1,4 +1,5 @@
-﻿<!-- index.html -->
+﻿@model Game
+<!-- index.html -->
 @section styles {
     <style>
         #canvas {
@@ -6,8 +7,17 @@
         }
     </style>
 }
-	<canvas id="canvas" width="800" height="600"></canvas>
+<div class="row">
+    <input type="hidden" id="GameWidth" value="@Model.Width"  />
+    <input type="hidden" id="GameHeight" value="@Model.Height" />
 
+    <div class="col-md-8">
+        <canvas id="canvas" width="800" height="600"></canvas>
+    </div>
+    <div class="col-md-4">
+        <ul id="Announcement"></ul>
+    </div>
+</div>
 
 <div class="modal fade" id="UserSettingModal" tabindex="-1" aria-labelledby="UserSettingModal" aria-hidden="true">
     <div class="modal-dialog">
@@ -36,36 +46,73 @@
     </div>
 </div>
 
+<div class="modal fade" id="GameOverModal" tabindex="-1" aria-labelledby="GameOverModal" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Game Over!</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p id="GameOverMessage">Bye!</p>               
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal" onclick="ShowUserModal()">Next Game</button>
+            </div>
+        </div>
+    </div>
+</div>
 @section scripts {
     <script>
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         var pressKeyList = [];
-        const ballRadius = 25;
-        var connection = new signalR.HubConnectionBuilder().withUrl("/chatHub").build();
-        var user = {
-
-        };
+        var connection = new signalR.HubConnectionBuilder().withUrl("/pubbleHub").build();
+        var user = null;
         var users = [];
 
+        var centerMode = true;
+
+        var gameWidth = document.getElementById('GameWidth').value;
+
+        var gameHeight = document.getElementById('GameHeight').value;
+
+        var windowWidth = canvas.width;
+
+        var windowHeight = canvas.height;
+
+        var centerX = gameWidth / 2 - (gameWidth - windowWidth)/2;
+
+        var centerY = gameHeight / 2 - (gameHeight - windowHeight) / 2;
+
+        var settingModal = new bootstrap.Modal(document.getElementById('UserSettingModal'), {
+            keyboard: false
+        });
+
+        var gameOverModal = new bootstrap.Modal(document.getElementById('GameOverModal'), {
+            keyboard: false
+        });
         $(function () {
             ShowUserModal();
         });
 
         function ShowUserModal() {
-            var settingModal = new bootstrap.Modal(document.getElementById('UserSettingModal'), {
-                keyboard: false
-            });
             settingModal.show();
         }
 
         function Start() {
+            user = {
+                Ball: {
+                    Radius: 25
+                }
+            };
             user.Name = document.getElementById("Name").value;
             user.Color = document.getElementById("Color").value;
             connection.invoke("Start", user).catch(function (err) {
                 return console.error(err.toString());
             });
-            bootstrap.Modal.getInstance(document.getElementById('UserSettingModal')).hide();
+            settingModal.hide();
         }
 
         connection.start().then(function () {
@@ -81,11 +128,22 @@
         });
 
         connection.on('UpdateUserList', function (updatedUsersJson) {
-            users = JSON.parse(updatedUsersJson);        
+            users = JSON.parse(updatedUsersJson);
+            user = users.find(e=>e.ConnectionId == user.ConnectionId);
         });
 
-        connection.on('GameOver', function () {
+        connection.on('GameOver', function (msg) {
+            document.getElementById('GameOverMessage').innerText = msg;
+            gameOverModal.show();
+        });
 
+        connection.on('WorldAnnouncement', function (msg) {
+            var li = document.createElement("li");
+            document.getElementById("Announcement").appendChild(li);
+            // We can assign user-supplied strings to an element's textContent because it
+            // is not interpreted as markup. If you're assigning in any other way, you
+            // should be aware of possible script injection concerns.
+            li.textContent = `[World]:${msg}`;
         });
 
         // Move the ball on arrow key press and send updates to the server
@@ -103,8 +161,8 @@
         function UpdateCanvas() {
             requestAnimationFrame(UpdateCanvas);
             // Clear the canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
+            ctx.clearRect(0, 0, 1200, 800);
+            Background();
 
             pressKeyList.forEach(k => {
                 switch (k) {
@@ -125,9 +183,9 @@
 
             // Draw each user's ball on the canvas
             users.forEach(user => {
-                switch (user.Shape.Type) {
+                switch (user.Ball.Type) {
                     case 0:
-                        drawBall(user.Shape.X, user.Shape.Y, user.Color);
+                        drawBall(user.Ball.X, user.Ball.Y, user.Ball.Radius, user.Color);
                         break;
                     default:
                         break;
@@ -143,13 +201,72 @@
             }
         }
 
+        function Background() {
+            backgroundColor = "#030318";
+            ctx.fillStyle = backgroundColor;
+            ctx.fillRect(calcX(0), calcY(0), calcX(gameWidth) - calcX(0), calcY(gameHeight) - calcY(0));
+            ctx.strokeStyle = "green";
+            ctx.strokeRect(calcX(0), calcY(0), calcX(gameWidth) - calcX(0), calcY(gameHeight) - calcY(0));
+        }
+
         // Draw the ball on the canvas
-        function drawBall(x, y,color) {
+        function drawBall(x,y,radius,color) {
             ctx.beginPath();
-            ctx.arc(x, y, ballRadius, 0, Math.PI * 2);
+            ctx.arc(calcX(x), calcY(y), radius, 0, Math.PI * 2);
             ctx.fillStyle = color;
             ctx.fill();
             ctx.closePath();
+        }
+
+        function calcX(x) {
+            if (!centerMode || user == null) return x;
+            if (user.Ball.X - centerX > 0) {
+                return x - (user.Ball.X - centerX);
+            }else{
+                return x + (centerX - user.Ball.X)
+            }
+            return x + (centerX - user.Ball.X);
+        }
+
+        function calcY(y) {
+            if (!centerMode || user == null) return y;
+            if (user.Ball.Y - centerY > 0) {
+                return y - (user.Ball.Y - centerY);
+            } else {
+                return y + (centerY- user.Ball.Y)
+            }
+            return y + (centerY - user.Ball.Y);
+        }
+
+        function DrawStarrySky(){
+            function createStars(width, height, spacing) {
+                const stars = [];
+
+                for (let x = 0; x < width; x += spacing) {
+                    for (let y = 0; y < height; y += spacing) {
+                        const star = {
+                            x: x,
+                            y: y
+                        };
+                        stars.push(star);
+                    }
+                }
+                return stars;
+            }
+
+            const stars = createStars(width, height, 30);
+
+            ctx.fillStyle = backgroundColor;
+            ctx.fillRect(0, 0, width, height);
+            stars.forEach(function (star) {
+                const x = star.x;
+                const y = star.y;
+                const r = 5;
+                ctx.beginPath();
+                ctx.fillStyle = "rgb(255, 255, 255)";
+                ctx.arc(x, y, r, 0, Math.PI * 2);
+                ctx.fill();
+            });
         }
     </script>
 }

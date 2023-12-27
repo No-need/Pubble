@@ -1,4 +1,5 @@
 using Pubble.Hubs;
+using Pubble.Models;
 
 namespace Pubble
 {
@@ -11,6 +12,11 @@ namespace Pubble
             // Add services to the container.
             builder.Services.AddControllersWithViews();
             builder.Services.AddSignalR();
+
+            builder.Services.AddKeyedSingleton<Game>("Pubble",new Game() { 
+                Height = 800,
+                Width = 1200,
+            });
 
             var app = builder.Build();
 
@@ -26,7 +32,7 @@ namespace Pubble
             app.UseStaticFiles();
 
             app.UseRouting();
-            app.MapHub<ChatHub>("/chatHub");
+            app.MapHub<PubbleHub>("/pubbleHub");
 
             app.UseAuthorization();
 

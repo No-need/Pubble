@@ -34,9 +34,9 @@ namespace Pubble.Controllers
             return View();
         }
 
-        public IActionResult Pubble2()
+        public IActionResult Pubble2([FromKeyedServices("Pubble")] Game game)
         {
-            return View();
+            return View(game);
         }
     }
 }
