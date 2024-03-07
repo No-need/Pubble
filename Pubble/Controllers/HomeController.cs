@@ -38,5 +38,10 @@ namespace Pubble.Controllers
         {
             return View(game);
         }
+
+        public IActionResult Control([FromKeyedServices("Pubble")] Game game)
+        {
+            return View(game);
+        }
     }
 }

@@ -1,76 +1,36 @@
 ﻿@model Game
-<!-- index.html -->
-@section styles {
-    <style>
-        #canvas {
-            border: 1px solid #000;
-        }
-    </style>
+
+@{
+    ViewData["Title"] = "Control";
 }
+
 <div class="row">
-    <input type="hidden" id="GameWidth" value="@Model.Width"  />
+    <div>
+        <button type="button" id="AddBall" onclick="AddBall()">Add Ball</button>
+    </div>
+</div>
+
+<div class="row">
+    <input type="hidden" id="GameWidth" value="@Model.Width" />
     <input type="hidden" id="GameHeight" value="@Model.Height" />
 
-    <div class="col-md-8">
-        <canvas id="canvas" width="800" height="600"></canvas>
+    <div class="col-auto">
+        <canvas id="canvas" width="@Model.Width" height="@Model.Height"></canvas>
     </div>
     <div class="col-md-4">
         <ul id="Announcement"></ul>
     </div>
 </div>
 
-<div class="modal fade" id="UserSettingModal" tabindex="-1" aria-labelledby="UserSettingModal" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">New Game</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <form onsubmit="Start();return false;">
-				<div class="modal-body">
-					<div class="mb-3">
-                        <label for="Name" class="col-form-label text-danger">*Name:</label>
-                        <input type="text" class="form-control" required id="Name" autocomplete="off">
-					</div>
-					<div class="mb-3">
-						<label for="Color" class="col-form-label">Color:</label>
-						<input class="form-control" id="Color">
-					</div>
-				</div>
-				<div class="modal-footer">
-					<button type="submit" class="btn btn-primary"
-                    >Start</button>
-				</div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<div class="modal fade" id="GameOverModal" tabindex="-1" aria-labelledby="GameOverModal" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Game Over!</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <p id="GameOverMessage">Bye!</p>               
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-primary" data-bs-dismiss="modal" onclick="ShowUserModal()">Next Game</button>
-            </div>
-        </div>
-    </div>
-</div>
-@section scripts {
+@section scripts{
     <script>
+        var connection = new signalR.HubConnectionBuilder().withUrl("/pubbleHub").build();
+
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
-        var pressKeyList = [];
-        var connection = new signalR.HubConnectionBuilder().withUrl("/pubbleHub").build();
         var user = null;
         var users = [];
+        var pressKeyList = [];
         var shapes = [];
         var centerMode = true;
 
@@ -82,40 +42,12 @@
 
         var windowHeight = canvas.height;
 
-        var centerX = gameWidth / 2 - (gameWidth - windowWidth)/2;
+        var centerX = gameWidth / 2 - (gameWidth - windowWidth) / 2;
 
         var centerY = gameHeight / 2 - (gameHeight - windowHeight) / 2;
 
         const stars = createStars(gameWidth, gameHeight, 50);
 
-        var settingModal = new bootstrap.Modal(document.getElementById('UserSettingModal'), {
-            keyboard: false
-        });
-
-        var gameOverModal = new bootstrap.Modal(document.getElementById('GameOverModal'), {
-            keyboard: false
-        });
-        $(function () {
-            ShowUserModal();
-        });
-
-        function ShowUserModal() {
-            settingModal.show();
-        }
-
-        function Start() {
-            user = {
-                Ball: {
-                    Radius: 25
-                }
-            };
-            user.Name = document.getElementById("Name").value;
-            user.Color = document.getElementById("Color").value;
-            connection.invoke("Start", user).catch(function (err) {
-                return console.error(err.toString());
-            });
-            settingModal.hide();
-        }
 
         connection.start().then(function () {
             console.log("Connection started");
@@ -124,28 +56,13 @@
             return console.error(err.toString());
         });
 
-        connection.on('Started', function (userData){
-            user = JSON.parse(userData);
-            console.log(user);
-        });
-
         connection.on('UpdateUserList', function (updatedUsersJson) {
             users = JSON.parse(updatedUsersJson);
-            user = users.find(e=>e.ConnectionId == user.ConnectionId);
+            user = users.find(e => e.ConnectionId == user.ConnectionId);
         });
 
         connection.on('UpdateShapeList', function (shpaeJson){
             shapes = JSON.parse(shpaeJson);
-        });
-
-        connection.on('GameOver', function (msg) {
-            document.getElementById('GameOverMessage').innerText = msg;
-            gameOverModal.show();
-        });
-
-        connection.on('Dead', function (msg) {
-            document.getElementById('GameOverMessage').innerText = msg;
-            gameOverModal.show();
         });
 
         connection.on('WorldAnnouncement', function (msg) {
@@ -157,17 +74,11 @@
             li.textContent = `[World]:${msg}`;
         });
 
-        // Move the ball on arrow key press and send updates to the server
-        window.addEventListener('keydown', (event) => {
-            let direction = '';
-            if (!pressKeyList.includes(event.key)) {
-                pressKeyList.push(event.key);
-            }
-        });
-
-        window.addEventListener('keyup', (e) => {
-            pressKeyList = pressKeyList.filter(x => x != e.key);
-        });
+        function AddBall() {
+            connection.invoke("AddBall").catch(function (err) {
+                return console.error(err.toString());
+            });
+        }
 
         function UpdateCanvas() {
             requestAnimationFrame(UpdateCanvas);
@@ -175,22 +86,6 @@
             ctx.clearRect(0, 0, 1200, 800);
             Background();
             DrawStarrySky();
-            pressKeyList.forEach(k => {
-                switch (k) {
-                    case 'ArrowUp':
-                        Move('up');
-                        break;
-                    case 'ArrowDown':
-                        Move('down');
-                        break;
-                    case 'ArrowLeft':
-                        Move('left');
-                        break;
-                    case 'ArrowRight':
-                        Move('right');
-                        break;
-                };
-            });
 
             // Draw each user's ball on the canvas
             users.forEach(user => {
@@ -213,14 +108,6 @@
             });
         }
 
-        function Move(direction) {
-            for (var i = 0; i < user.Speed; i++) {
-                connection.invoke("MoveBall", direction).catch(function (err) {
-                    return console.error(err.toString());
-                });
-            }
-        }
-
         function Background() {
             backgroundColor = "#030318";
             ctx.fillStyle = backgroundColor;
@@ -230,7 +117,7 @@
         }
 
         // Draw the ball on the canvas
-        function drawBall(x,y,radius,color) {
+        function drawBall(x, y, radius, color) {
             ctx.beginPath();
             ctx.arc(calcX(x), calcY(y), radius, 0, Math.PI * 2);
             ctx.fillStyle = color;
@@ -242,7 +129,7 @@
             if (!centerMode || user == null) return x;
             if (user.Ball.X - centerX > 0) {
                 return x - (user.Ball.X - centerX);
-            }else{
+            } else {
                 return x + (centerX - user.Ball.X)
             }
             return x + (centerX - user.Ball.X);
@@ -253,7 +140,7 @@
             if (user.Ball.Y - centerY > 0) {
                 return y - (user.Ball.Y - centerY);
             } else {
-                return y + (centerY- user.Ball.Y)
+                return y + (centerY - user.Ball.Y)
             }
             return y + (centerY - user.Ball.Y);
         }
@@ -306,7 +193,7 @@
                 const x = star.x;
                 const y = star.y;
                 const r = star.r;
-                const opacity = getOpacity(count+i);
+                const opacity = getOpacity(count + i);
                 fillCircle(calcX(x), calcY(y), r, `rgba(255, 255, 255, ${opacity}`);
                 i++;
             });
@@ -318,7 +205,7 @@
                 r: 80
             };
 
-            fillCircle( moon.x, moon.y, moon.r, moon.color);
+            fillCircle(moon.x, moon.y, moon.r, moon.color);
             // render a smaller circle above the moon to give it that well-known moon-shape
             fillCircle(
                 moon.x - moon.r / 3,

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.SignalR;
 using Pubble.Hubs;
 using Pubble.Models;
 
@@ -13,10 +14,14 @@ namespace Pubble
             builder.Services.AddControllersWithViews();
             builder.Services.AddSignalR();
 
-            builder.Services.AddKeyedSingleton<Game>("Pubble",new Game() { 
-                Height = 800,
-                Width = 1200,
-            });
+            builder.Services.AddKeyedSingleton<Game>("Pubble",(provider,key) => {
+                return new Game()
+                {
+                    Height = 800,
+                    Width = 1200,
+                    Hub = provider.GetRequiredService<IHubContext<PubbleHub>>()
+                };
+               });
 
             var app = builder.Build();
 

@@ -1,6 +1,7 @@
 ﻿using Microsoft.CodeAnalysis.Elfie.Serialization;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using System.Drawing;
 
 namespace Pubble.Models
 {
@@ -12,11 +13,17 @@ namespace Pubble.Models
 
     public class Shape 
     {
-        public int X { get; set; } 
+        public double X { get; set; } 
 
-        public int Y { get; set; } 
+        public double Y { get; set; } 
 
         public virtual ShapeType Type { get; }
+
+        public int Speed { get; set; }
+
+        public string Color { get; set; }
+
+        public int Direction { get; set; }
     }
 
     public class Ball : Shape

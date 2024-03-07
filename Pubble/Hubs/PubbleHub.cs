@@ -2,7 +2,9 @@
 using Microsoft.EntityFrameworkCore.ValueGeneration;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Pubble.Enums;
 using Pubble.Models;
+using System.Collections.Concurrent;
 using System.Text.Json;
 
 namespace Pubble.Hubs
@@ -10,12 +12,18 @@ namespace Pubble.Hubs
     public class PubbleHub : Hub
     {
         public static Game _game;
-        private static List<User> _users = new List<User>();
+        private static List<User> _users;
+        private static ConcurrentBag<Shape> _shapes;
 
         public  PubbleHub([FromKeyedServices("Pubble")] Game game)
         {
-            _game = game;
-        }
+            if (_game == null)
+            {
+                _game = game;
+                _users = game.Users;
+                _shapes = game.Shapes;
+            }
+		}
 
         public async Task SendMessage(string user, string message)
         {
@@ -24,35 +32,11 @@ namespace Pubble.Hubs
         }
 
         #region event
-        public async Task Start(User user)
-        {
-            var rand = new Random();
-            user.ConnectionId = this.Context.ConnectionId;
-            user.Ball.X = rand.Next(0 + user.Ball.Radius, _game.Width - user.Ball.Radius);
-            user.Ball.Y = rand.Next(0 + user.Ball.Radius, _game.Height - user.Ball.Radius);
-            _users.Add(user);
-            await Started(user);
-            await UpdateUserList(Clients.All);
-        }
-
-        public async Task MoveBall(string direction)
-        {
-            var user = _users.FirstOrDefault(u => u.ConnectionId == Context.ConnectionId);
-
-            if (user != null)
-            {
-                // Update user's ball movement
-                UpdateUserBallPosition(user.Ball, direction);
-
-                // Broadcast the updated user list to all connected clients
-                await UpdateUserList(Clients.All);
-                CheckCollision(user);
-            }
-        }
 
         public override async Task OnConnectedAsync()
         {
             await UpdateUserList(Clients.Caller);
+            await UpdateShapeList(Clients.All);
             await base.OnConnectedAsync();
         }
 
@@ -71,6 +55,58 @@ namespace Pubble.Hubs
             await base.OnDisconnectedAsync(exception);
         }
 
+        public async Task Start(User user)
+        {
+			if (_game.Status == Status.Stop)
+			{
+				_game.Start();
+			}
+			var rand = new Random();
+            user.ConnectionId = this.Context.ConnectionId;
+            user.Ball.X = rand.Next(0 + user.Ball.Radius, _game.Width - user.Ball.Radius);
+            user.Ball.Y = rand.Next(0 + user.Ball.Radius, _game.Height - user.Ball.Radius);
+            _users.Add(user);
+            await Started(user);
+            await UpdateUserList(Clients.All);
+        }
+
+        public void StopGame()
+        {
+            _game.Stop();
+        }
+
+        public async Task MoveBall(string direction)
+        {
+            var user = _users.FirstOrDefault(u => u.ConnectionId == Context.ConnectionId);
+
+            if (user != null)
+            {
+                // Update user's ball movement
+                UpdateUserBallPosition(user.Ball, direction);
+
+                // Broadcast the updated user list to all connected clients
+                await UpdateUserList(Clients.All);
+                CheckCollision(user);
+            }
+        }
+
+        public async Task AddBall()
+        {
+            Ball ball = new Ball();
+            var rand = new Random();
+            ball.Radius = rand.Next(50,100);
+            ball.X = rand.Next(0 + ball.Radius, _game.Width - ball.Radius);
+            ball.Y = rand.Next(0 + ball.Radius, _game.Height - ball.Radius);
+            ball.Speed = rand.Next(600, 900);
+            ball.Color = $"rgb({rand.Next(0, 255)},{rand.Next(0, 255)},{rand.Next(0, 255)})";
+            ball.Direction = rand.Next(0, 360);
+            lock (_shapes)
+            {
+                _shapes.Add(ball);
+            }
+
+            await UpdateShapeList(Clients.All);
+        }
         #endregion
 
         #region broadcast
@@ -79,9 +115,14 @@ namespace Pubble.Hubs
             Clients.Caller.SendAsync("Started", JsonConvert.SerializeObject(user));
         }
 
-        public async Task UpdateUserList(IClientProxy clientProxy)
+        public static async Task UpdateUserList(IClientProxy clientProxy)
         {
             clientProxy.SendAsync("UpdateUserList", JsonConvert.SerializeObject(_users));
+        }
+
+        public static async Task UpdateShapeList(IClientProxy clientProxy)
+        {
+            clientProxy.SendAsync("UpdateShapeList", JsonConvert.SerializeObject(_shapes));
         }
 
         public async Task GameOver(List<User> users)
@@ -92,9 +133,17 @@ namespace Pubble.Hubs
             }
         }
 
-        public async Task WorldAnnouncement(string message)
+        public static async Task Dead(IHubContext<PubbleHub> hubContext, User user)
         {
-            Clients.All.SendAsync("WorldAnnouncement", message);
+            _users.Remove(user);
+            await UpdateUserList(hubContext.Clients.All);
+            await hubContext.Clients.Clients(user.ConnectionId).SendAsync("Dead", "Kill by Ball !");
+            WorldAnnouncement(hubContext.Clients.All, $"{user.Name} Dead !");
+		}
+
+        public static async Task WorldAnnouncement(IClientProxy all,string message)
+        {
+            all.SendAsync("WorldAnnouncement", message);
         }
         #endregion
 
@@ -137,7 +186,7 @@ namespace Pubble.Hubs
                 _users.RemoveAll(x=>collisionUser.Any(y=>x.ConnectionId==y.ConnectionId));
                 await GameOver(collisionUser);
                 await UpdateUserList(Clients.All);
-                WorldAnnouncement(string.Join(",",collisionUser.Select(x=>x.Name))+ " Collision !");
+                WorldAnnouncement(Clients.All, string.Join(",",collisionUser.Select(x=>x.Name))+ " Collision !");
             }
         }
         #endregion
